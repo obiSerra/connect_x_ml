@@ -1,0 +1,5 @@
+models/
+logs/
+data/
+
+.ipynb_checkpoints
