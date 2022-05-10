@@ -1,6 +1,7 @@
 import os
 import sys
 import math
+from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 
 import gym
@@ -11,7 +12,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from torch import nn
 
 from lookahead import multistep_agent_factory
-from utils import (ConnectFourGymV3, TqdmCallback, agent_factory,
+from utils import (ConnectFourGymV5, TqdmCallback, agent_factory,
                    get_win_percentages)
 
 
@@ -44,7 +45,8 @@ def print_progress(results, name, version=""):
         f" win: {vs_negamax[0][0]} | invalid: {vs_negamax[0][1]}")
     print(f"score: {score}")
 
-    lines = [f"{version},",
+    lines = [f"{name},",
+             f"{version},",
              f"{vs_random[0][0]},",
              f"{vs_random[0][1]},",
              f"{vs_adv[0][0]},",
@@ -52,6 +54,7 @@ def print_progress(results, name, version=""):
              f"{vs_negamax[0][0]},",
              f"{vs_negamax[0][1]},",
              f"{score},",
+             f"{datetime.now()}",
              "\n"
              ]
     # Writing to file
@@ -72,7 +75,7 @@ TIMESTEPS = int(10e3)
 starting_iter = 0
 iters = 0
 max_iters = 1000
-model_name = "look_trained_3"
+model_name = "new_aggro_strided"
 
 # Log setup
 logdir = "logs"
@@ -88,7 +91,7 @@ if not os.path.exists(MODEL_DIR):
 
 
 def env_factory(adv_agent):
-    env = ConnectFourGymV3(agent2=adv_agent)
+    env = ConnectFourGymV5(agent2=adv_agent)
     env.reset()
     return env
 
@@ -104,34 +107,40 @@ def PPO_model_factory(env, version=None, params={}):
 
 class FeatureExtractorNet(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Box,
-                 features_dim: int = 1024):
+                 features_dim: int = 42):
         super(FeatureExtractorNet, self).__init__(
             observation_space, features_dim)
-        self.conv1 = nn.Conv2d(1, 42, kernel_size=3)
-        self.conv2 = nn.Conv2d(42, 64, kernel_size=2)
-        self.fc3 = nn.Linear(768, features_dim)
+        # edge extraction
+        self.conv1 = nn.Conv2d(1, 3, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(3, 9, kernel_size=3, stride=1)
+        # ridurre pesantemente feature dimentions
+        self.fc3 = nn.Linear(180, features_dim)
 
     def forward(self, x):
-
+        # print("in", x)
+        # print(x.size())
+        x = x / 2  # input between 0/1
+        # print("in2", x)
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = nn.Flatten()(x)
         x = F.relu(self.fc3(x))
-
+        # print("out", x)
         return x
 
 
 policy_kwargs = {
     'activation_fn': th.nn.ReLU,
-    'net_arch': [128, dict(pi=[128, 128], vf=[128, 128])],
+    'net_arch': [dict(pi=[42, 42, 42, 42, 42, 42, 42, 42], vf=[42, 42, 42, 42, 42, 42, 42, 42])],
     'features_extractor_class': FeatureExtractorNet,
 }
 
 next_agent = "random"
+# next_agent = multistep_agent_factory()
 env = env_factory(next_agent)
 model_params = {
-    "batch_size": 32,
-    "n_steps": 1024,
+    "batch_size": 84,
+    "n_steps": 512,
     "policy_kwargs": policy_kwargs,
     # learning_rate=2.5e-4,
     # clip_range=0.2,
@@ -151,7 +160,8 @@ with open(f"data/policy_{model_name}.txt", "w") as file:
 
 # creating the csv file
 with open(f"data/progress_{model_name}.csv", "w") as file:
-    lines = ["version,",
+    lines = ["model,"
+             "version,",
              "vs random win,",
              "vs random invalid,",
              "vs adv_agent win,",
@@ -159,8 +169,8 @@ with open(f"data/progress_{model_name}.csv", "w") as file:
              "vs negamax win,",
              "vs negamax invalid,",
              "score,",
-             "\n"
-             ]
+             "saved on",
+             "\n"]
     # Writing to file
 
     file.writelines(lines)
@@ -178,18 +188,20 @@ while iters < max_iters:
     model.save(f"{MODEL_DIR}/{version}")
     print(f"Done model version: {version}")
     agent = agent_factory(model)
+    print("Evaluating model...")
     progress = test_agent_results(agent)
     scores = score_progress(progress)
     print_progress(progress, model_name, version=version)
-    vs_random, vs_adv, vs_negamax = progress
+    # vs_random, vs_adv, vs_negamax = progress
 
-    if vs_random[0][0] >= 0.8:
-        next_agent = multistep_agent_factory()
-    elif vs_random[0][0] < 0.5:
-        next_agent = "random"
-    if vs_adv[0][0] >= 0.8:
-        print("DOOOOOONE")
-        break
+    # if vs_random[0][0] < 0.7:
+    #     next_agent = "random"
+    # else:
+    #     next_agent = agent
 
-    model = PPO_model_factory(env=env_factory(
-        next_agent), version=version)
+    # if vs_adv[0][0] >= 0.8:
+    #     print("DOOOOOONE")
+    #     break
+
+    # model = PPO_model_factory(env=env_factory(
+    #     next_agent), version=version)

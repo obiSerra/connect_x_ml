@@ -175,7 +175,7 @@ class ConnectFourGymV4:
             low=0, high=2,
             shape=self.new_shape, dtype=np.int)
         # Tuple corresponding to the min and max possible rewards
-        self.reward_range = (-10, 2)
+        self.reward_range = (-100, 10)
         # StableBaselines throws error if these are not defined
         self.spec = None
         self.metadata = None
@@ -184,9 +184,53 @@ class ConnectFourGymV4:
         self.obs = self.env.reset()
         return np.array(self.obs['board']).reshape(*self.new_shape)
 
-    def change_reward(self, old_reward, done):
+    def change_reward(self, old_reward, done, steps_done=0):
         if old_reward == 1:
-            return 2
+            return 10
+        elif done:
+            return -10
+        else:  # Reward 1/42
+            return (self.rows * self.columns - steps_done) / (self.rows * self.columns)
+
+    def step(self, action):
+        # Check if agent's move is valid
+        is_valid = (self.obs['board'][int(action)] == 0)
+        if is_valid:  # Play the move
+            self.obs, old_reward, done, _ = self.env.step(int(action))
+            # print(self.obs['board'])
+            steps_done = len([o for o in self.obs['board'] if o != 0])
+            reward = self.change_reward(
+                old_reward, done, steps_done=steps_done)
+        else:  # End the game and penalize agent
+            reward, done, _ = -100, True, {}
+        return np.array(self.obs['board']).reshape(
+            *self.new_shape), reward, done, _
+
+
+class ConnectFourGymV5:
+    def __init__(self, agent2="random"):
+        ks_env = make("connectx", debug=True)
+        self.env = ks_env.train([None, agent2])
+        self.rows = ks_env.configuration.rows
+        self.columns = ks_env.configuration.columns
+        self.new_shape = (1, self.rows, self.columns)
+        self.action_space = spaces.Discrete(self.columns)
+        self.observation_space = spaces.Box(
+            low=0, high=2,
+            shape=self.new_shape, dtype=np.int)
+        # Tuple corresponding to the min and max possible rewards
+        self.reward_range = (-10, 3)
+        # StableBaselines throws error if these are not defined
+        self.spec = None
+        self.metadata = None
+
+    def reset(self):
+        self.obs = self.env.reset()
+        return np.array(self.obs['board']).reshape(*self.new_shape)
+
+    def change_reward(self, old_reward, done, steps_done=0):
+        if old_reward == 1:
+            return 2 + (1 / steps_done)
         elif done:
             return -2
         else:  # Reward 1/42
@@ -197,7 +241,10 @@ class ConnectFourGymV4:
         is_valid = (self.obs['board'][int(action)] == 0)
         if is_valid:  # Play the move
             self.obs, old_reward, done, _ = self.env.step(int(action))
-            reward = self.change_reward(old_reward, done)
+            # print(self.obs['board'])
+            steps_done = len([o for o in self.obs['board'] if o != 0])
+            reward = self.change_reward(
+                old_reward, done, steps_done=steps_done)
         else:  # End the game and penalize agent
             reward, done, _ = -10, True, {}
         return np.array(self.obs['board']).reshape(
