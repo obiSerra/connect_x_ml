@@ -75,7 +75,7 @@ TIMESTEPS = int(10e3)
 starting_iter = 0
 iters = 0
 max_iters = 1000
-model_name = "new_aggro_strided"
+model_name = "self_improv_1"
 
 # Log setup
 logdir = "logs"
@@ -107,14 +107,16 @@ def PPO_model_factory(env, version=None, params={}):
 
 class FeatureExtractorNet(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Box,
-                 features_dim: int = 42):
+                 features_dim: int = 21):
         super(FeatureExtractorNet, self).__init__(
             observation_space, features_dim)
         # edge extraction
-        self.conv1 = nn.Conv2d(1, 3, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(3, 9, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(1, 3, kernel_size=1)
+        self.conv2 = nn.Conv2d(3, 9, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(9, 12, kernel_size=3, stride=1)
+        self.conv4 = nn.Conv2d(12, 6, kernel_size=3, stride=1)
         # ridurre pesantemente feature dimentions
-        self.fc3 = nn.Linear(180, features_dim)
+        self.fc3 = nn.Linear(36, features_dim)
 
     def forward(self, x):
         # print("in", x)
@@ -123,6 +125,8 @@ class FeatureExtractorNet(BaseFeaturesExtractor):
         # print("in2", x)
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = F.relu(self.conv4(x))
         x = nn.Flatten()(x)
         x = F.relu(self.fc3(x))
         # print("out", x)
@@ -131,7 +135,7 @@ class FeatureExtractorNet(BaseFeaturesExtractor):
 
 policy_kwargs = {
     'activation_fn': th.nn.ReLU,
-    'net_arch': [dict(pi=[42, 42, 42, 42, 42, 42, 42, 42], vf=[42, 42, 42, 42, 42, 42, 42, 42])],
+    'net_arch': [dict(pi=[21, 21, 21, 21], vf=[21, 21, 21, 21])],
     'features_extractor_class': FeatureExtractorNet,
 }
 
@@ -192,16 +196,16 @@ while iters < max_iters:
     progress = test_agent_results(agent)
     scores = score_progress(progress)
     print_progress(progress, model_name, version=version)
-    # vs_random, vs_adv, vs_negamax = progress
+    vs_random, vs_adv, vs_negamax = progress
 
-    # if vs_random[0][0] < 0.7:
-    #     next_agent = "random"
-    # else:
-    #     next_agent = agent
+    if vs_random[0][0] < 0.7:
+        next_agent = "random"
+    else:
+        next_agent = agent
 
-    # if vs_adv[0][0] >= 0.8:
-    #     print("DOOOOOONE")
-    #     break
+    if vs_adv[0][0] >= 0.8:
+        print("DOOOOOONE")
+        break
 
-    # model = PPO_model_factory(env=env_factory(
-    #     next_agent), version=version)
+    model = PPO_model_factory(env=env_factory(
+        next_agent), version=version)
