@@ -2,7 +2,9 @@ import numpy as np
 from torch import tensor
 
 import logging
-logging.basicConfig(filename='eval.log',
+LOGGING_FILE = "debug.log"
+
+logging.basicConfig(filename=LOGGING_FILE,
                     encoding='utf-8', level=logging.DEBUG)
 
 def evaluate_line(line, mine=1, oth=2, neu=0):

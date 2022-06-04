@@ -8,9 +8,12 @@ from stable_baselines3.common.callbacks import BaseCallback
 from tqdm import tqdm
 from collections import namedtuple
 import json
-
 import logging
-logging.basicConfig(filename='eval.log',
+
+
+LOGGING_FILE = "debug.log"
+
+logging.basicConfig(filename=LOGGING_FILE,
                     encoding='utf-8', level=logging.DEBUG)
 
 
@@ -121,4 +124,4 @@ def update_model_data(model_name, version, results_random, results_look):
                  "\n"]
     # Writing to file
 
-    file.writelines(lines)
+        file.writelines(lines)

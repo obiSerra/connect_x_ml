@@ -1,4 +1,4 @@
-
+import sys
 import json
 import os
 from datetime import datetime
@@ -9,18 +9,21 @@ import torch as th
 import torch.nn.functional as F
 from kaggle_environments import make
 from stable_baselines3 import PPO
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from torch import nn as nn
 
-from connectx.common.utils import get_win_percentages, print_win_percentages, update_model_data, get_agent, TqdmCallback, save_model_data
+from connectx.common.utils import get_win_percentages, print_win_percentages, update_model_data
 from connectx.common.lookahead import multistep_agent_factory
 from connectx.common.ConnectFourGym import ConnectFourGym
 
 
 import importlib
 
-module = importlib.import_module('models/si_model.py')
 
+if len(sys.argv) < 2:
+    print("usage $ python src/train.py <model_name>")
+    exit(1)
+
+module = importlib.import_module(f'connectx.models.{sys.argv[1]}')
 
 learner = module.learner
 
@@ -30,13 +33,12 @@ timesteps = 10e3
 iterations = 10
 version = 0
 for i in range(1, iterations + 1):
-    print(f'Version {i} training vs Random')
+    version = int(timesteps * i)
+    print(f'Version {version} - i {i} training vs Random')
     learner.learn(timesteps)
 
-    version = int(timesteps * i)
-
     learner.save(version)
-    agent = learner.get_agent(learner)
+    agent = learner.get_agent()
     print("Vs Random:")
     results_random = get_win_percentages(agent, "random")
     print_win_percentages(results_random)
@@ -49,7 +51,6 @@ for i in range(1, iterations + 1):
 
 
 # Vs Lookahead Training
-
 prev_version = version
 env = ConnectFourGym(agent2=multistep_agent_factory())
 
@@ -59,13 +60,13 @@ timesteps = 10e3
 iterations = 10
 
 for i in range(1, iterations + 1):
-    print(f'Version {i} training vs Lookahead')
+    print(f'Version {version} - i {i} training vs Lookahead')
     learner.learn(timesteps)
 
     version = int(timesteps * i) + prev_version
 
     learner.save(version)
-    agent = learner.get_agent(learner)
+    agent = learner.get_agent()
     print("Vs Random:")
     results_random = get_win_percentages(agent, "random")
     print_win_percentages(results_random)
@@ -90,13 +91,13 @@ timesteps = 10e3
 iterations = 10
 
 for i in range(1, iterations + 1):
-    print(f'Version {i} training vs prev agent')
+    print(f'Version {version} - i {i} training vs Prev Agent')
     learner.learn(timesteps)
 
     version = int(timesteps * i) + prev_version
 
     learner.save(version)
-    agent = learner.get_agent(learner)
+    agent = learner.get_agent()
     print("Vs Random:")
     results_random = get_win_percentages(agent, "random")
     print_win_percentages(results_random)
@@ -108,7 +109,6 @@ for i in range(1, iterations + 1):
     update_model_data(learner.model_name, version, results_random, results_look)
     env = ConnectFourGym(agent2=agent)
     learner.load_model_version(env, version)
-
 
 
 print("Training Done")
